@@ -24,3 +24,14 @@ test_data_dir = "/content/assignment_1/test/images"
 
 #load the train and test data
 dataset = ImageFolder()
+
+
+# Carica il tensor
+import torch
+from torchvision import transforms
+from PIL import Image
+
+img = Image.open("/content/assignment_1/train/images/152832.jpg")
+img
+convert_tensor = transforms.ToTensor()
+convert_tensor(img)
