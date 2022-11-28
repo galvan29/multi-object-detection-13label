@@ -27,7 +27,7 @@ def items(jsstring):
     
     return ret
 
-image_dir = '/home/fdsa/Documents/assignment_1/train/'
+image_dir = './assignment_1/train/'
 
 def preprocess_dataset():
     # Lists that will contain the whole dataset
