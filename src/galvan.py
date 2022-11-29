@@ -23,6 +23,8 @@ import time
 from PIL import Image
 from sklearn.model_selection import train_test_split
 
+scale = 448 
+samples = 500
 
 def items(jsstring):
     ret = []
@@ -32,27 +34,26 @@ def items(jsstring):
     
     return ret
 
-image_dir = '../assignment_1/train/'
+image_dir = './assignment_1/train/'
 
 def preprocess_dataset():
     # Lists that will contain the whole dataset
     labels = []
     boxes = []
     images = []
-    scale = 256
 
     rows = os.listdir(image_dir + "images")[::]
     cicle = 0
-    for row in rows[:1000]:
+    for row in rows[:samples]:
         stringa = str(row[0:6]) + ".json"
         with open(image_dir + "annotations/" + stringa, 'r') as f:
             data = json.loads(f.read())
             array = items(data)
             img_path = row
             image = cv2.imread(os.path.join(image_dir + "images/",img_path))
-            h = image.shape[0] / 256
-            w = image.shape[1] / 256
-            image = cv2.resize(image, (256, 256))
+            h = image.shape[0] / scale
+            w = image.shape[1] / scale
+            image = cv2.resize(image, (scale, scale))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             image = image.astype("float") / (255.0) 
             #boxes.append([])
@@ -62,10 +63,10 @@ def preprocess_dataset():
                 #boxes[cicle].append(item['bounding_box'])
                 #labels[cicle].append(item['category_name'])
             lista = array[0]['bounding_box']
-            lista[0] = lista[0]/256/w
-            lista[1] = lista[1]/256/h
-            lista[2] = lista[2]/256/w
-            lista[3] = lista[3]/256/h
+            lista[0] = lista[0]/scale/w
+            lista[1] = lista[1]/scale/h
+            lista[2] = lista[2]/scale/w
+            lista[3] = lista[3]/scale/h
             boxes.append(lista)          #da salvare smontato
             labels.append(array[0]['category_name'])
 
@@ -78,16 +79,16 @@ def display_boxes(labels, boxes, img_list):
     random_range = random.sample(range(1, len(img_list)), 1)
 
     for itr, i in enumerate(random_range, 1):
-        img_size = 256 
+        img_size = scale 
         image  = img_list[i] 
 
         # Draw bounding boxes on the image
         #for box in boxes[i]:
         a1, b1, a2, b2 = boxes[i]
-        x1 = a1 * 256
-        x2 = a2 * 256
-        y1 = b1 * 256
-        y2 = b2 * 256
+        x1 = a1 * scale
+        x2 = a2 * scale
+        y1 = b1 * scale
+        y2 = b2 * scale
 
         #x1 = a1 * width[i]
         #x2 = a2 * height[i]
@@ -108,8 +109,8 @@ def display_boxes(labels, boxes, img_list):
 
 # Load images, labels, boxes
 labels, boxes, img_list = preprocess_dataset()
-print(boxes)
-display_boxes(labels, boxes, img_list)
+#print(boxes)
+#display_boxes(labels, boxes, img_list)
 
 #train_images = np.array(img_list)
 #train_boxes = np.array(boxes)
@@ -146,7 +147,7 @@ def change(label):
       return 11
   elif label == 'vest dress':
       return 12
-  elif _:
+  else:
       print("Non ha classe")
 for label in labels:
     train_labels.append(change(label))
@@ -160,9 +161,6 @@ val_labels, train_boxes, val_boxes = train_test_split( np.array(img_list),
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device
-
-
-
 
 class Dataset():
     def __init__(self, train_images, train_labels, train_boxes):
@@ -194,21 +192,26 @@ class Network(nn.Module):
     def __init__(self):
         super(Network, self).__init__()
 
-        # CNNs for rgb images
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=6, kernel_size=5)
-        self.conv2 = nn.Conv2d(in_channels=6, out_channels=12, kernel_size=5)
-        self.conv3 = nn.Conv2d(in_channels=12, out_channels=24, kernel_size=5)
-        self.conv4 = nn.Conv2d(in_channels=24, out_channels=48, kernel_size=5)
-        self.conv5 = nn.Conv2d(in_channels=48, out_channels=192, kernel_size=5)
+        # CNN
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=192, stride=2, kernel_size=7)
 
-        self.class_fc1 = nn.Linear(in_features=1728, out_features=240)
-        self.class_fc2 = nn.Linear(in_features=240, out_features=120)
-        self.class_out = nn.Linear(in_features=120, out_features=13)
+        self.conv2 = nn.Conv2d(in_channels=192, out_channels= 256, kernel_size=3)
 
-        self.box_fc1 = nn.Linear(in_features=1728, out_features=240)
-        self.box_fc2 = nn.Linear(in_features=240, out_features=120)
-        self.box_out = nn.Linear(in_features=120, out_features=4)
+        self.conv3 = nn.Conv2d(in_channels=256, out_channels= 512, kernel_size=3)
 
+        self.conv4 = nn.Conv2d(in_channels=512, out_channels= 1024, kernel_size=3)
+
+        self.conv5 = nn.Conv2d(in_channels=1024, out_channels= 1024, kernel_size=3)
+        
+        self.conv6 = nn.Conv2d(in_channels=1024, out_channels= 1024, kernel_size=3)
+
+        self.class_fc1 = nn.Linear(in_features=65536, out_features=32)
+        self.class_fc2 = nn.Linear(in_features=32, out_features=20)
+        self.class_out = nn.Linear(in_features=20, out_features=13)
+        
+        self.box_fc1 = nn.Linear(in_features=65536, out_features=32)
+        self.box_fc2 = nn.Linear(in_features=32, out_features=20)
+        self.box_out = nn.Linear(in_features=20, out_features=4)
 
     def forward(self, t):
         t = self.conv1(t)
@@ -228,12 +231,11 @@ class Network(nn.Module):
         t = F.max_pool2d(t, kernel_size=2, stride=2)
 
         t = self.conv5(t)
-        t = F.relu(t)
-        t = F.avg_pool2d(t, kernel_size=4, stride=2)
+        t = self.conv6(t) 
 
-        t = torch.flatten(t,start_dim=1)
+        t = torch.flatten(t, start_dim=1)
 
-
+        #print(len(t))
         class_t = self.class_fc1(t)
         class_t = F.relu(class_t)
 
@@ -320,12 +322,11 @@ def train(model):
         torch.save(model.state_dict(), "models/model_ep"+str(epoch+1)+".pth")
 
 print("Creato train")    
-#train(model)
+train(model)
 print("Eseguito train")    
 
 
-
-def preprocess(img, image_size = 256):
+def preprocess(img, image_size = scale):
     image = cv2.resize(img, (image_size, image_size))
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image = image.astype("float") / 255.0 
@@ -344,10 +345,10 @@ def postprocess(image, results):
     x1, y1, x2, y2 = bounding_box[0]
 
     # # Convert the coordinates from relative (i.e. 0-1) to actual values
-    x1 = int(256 * x1)
-    x2 = int(256 * x2)
-    y1 = int(256 * y1)
-    y2 = int(256 * y2)
+    x1 = int(scale * x1)
+    x2 = int(scale * x2)
+    y1 = int(scale * y1)
+    y2 = int(scale * y2)
     print(x1, x2, y1, y2)
     # return the lable and coordinates
     return class_label, (x1,y1,x2,y2),torch.max(class_probs)*100
@@ -363,8 +364,8 @@ def predict(image,  scale = 0.5):
     
     # Reading Image
     img  = cv2.imread(image)
-    h = img.shape[0] / 256
-    w = img.shape[1] / 256
+    h = img.shape[0] / scale
+    w = img.shape[1] / scale
     print(h, w)
     # # Before we can make a prediction we need to preprocess the image.
     processed_image = preprocess(img)
@@ -394,6 +395,7 @@ def predict(image,  scale = 0.5):
     plt.imshow(img[:,:,::-1])
     plt.show()
 
-
-image = "../assignment_1/train/images/001820.jpg"
-predict(image)
+while(True):
+    imcode = input("Codice: ")
+    image = "./assignment_1/test/images/"+imcode+".jpg"
+    predict(image)
