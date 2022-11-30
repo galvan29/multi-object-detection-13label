@@ -29,9 +29,10 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 scale = 112 
-samples = 600
-
-image_dir = '../../assignment_1/train/'
+samples = 18000
+active_train = True
+num_of_epochs = 50
+image_dir = './assignment_1/train/'
 
 def items(jsstring):
     ret = []
@@ -168,11 +169,11 @@ for box in boxes:
   train_boxes.append([box[i] if i<len(box) else [-1, -1, -1, -1] for i in range(max(6, len(box)))])
 #train_labels = np.array(train_labels)
 
-
 train_images, val_images, train_labels, \
 val_labels, train_boxes, val_boxes = train_test_split( np.array(img_list), 
                 np.array(train_labels), np.array(train_boxes), test_size = 0.2, 
                 random_state = 43)
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 device
@@ -220,23 +221,29 @@ class Network(nn.Module):
 
         self.conv4 = nn.Sequential(nn.Conv2d(in_channels=75, out_channels= 210, kernel_size=3, padding = 2), nn.BatchNorm2d(210))
 
-        self.conv5 = nn.Sequential(nn.Conv2d(in_channels=210, out_channels= 512, kernel_size=3))
+        self.conv5 = nn.Sequential(nn.Conv2d(in_channels=210, out_channels= 512, kernel_size=3, padding=2))
         
         self.conv6 = nn.Conv2d(in_channels=512, out_channels= 1024, kernel_size=3)
 
-        #self.conv7 = nn.Conv2d(in_channels=1024, out_channels= 2048, kernel_size=3)
+        self.conv7 = nn.Conv2d(in_channels=1024, out_channels= 2048, kernel_size=3)
 
         #self.conv8 = nn.Conv2d(in_channels=2048, out_channels= 2048, kernel_size=3)
 
-        self.class_fc1 = nn.Linear(in_features=1024, out_features=512)
+        self.class_fc1 = nn.Linear(in_features=2048, out_features=512)
         self.class_fc1_2 = nn.Linear(in_features=512, out_features=256)
         self.class_fc2 = nn.Linear(in_features=256, out_features=20)
         self.class_out = nn.Linear(in_features=20, out_features=13)
+		
+        self.class_fc2a = nn.Linear(in_features=256, out_features=20)
+        self.class_outa = nn.Linear(in_features=20, out_features=13)
         
-        self.box_fc1 = nn.Linear(in_features=1024, out_features=512)
+        self.box_fc1 = nn.Linear(in_features=2048, out_features=512)
         self.box_fc1_2 = nn.Linear(in_features=512, out_features=256)
         self.box_fc2 = nn.Linear(in_features=256, out_features=20)
         self.box_out = nn.Linear(in_features=20, out_features=4)
+		
+        self.box_outa = nn.Linear(in_features=20, out_features=4)
+
 
         self.relu = nn.LeakyReLU(inplace = True)
         self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -261,7 +268,7 @@ class Network(nn.Module):
 
         t = self.conv5(t)
         t = self.conv6(t) 
-        #t = self.conv7(t) 
+        t = self.conv7(t) 
         #t = self.conv8(t) 
 
         t = torch.flatten(t, start_dim=1)
@@ -271,20 +278,23 @@ class Network(nn.Module):
         class_t = self.relu(class_t)
         class_t = self.drop(class_t)
 
-        class_t1 = self.class_fc1_2(class_t)
+        class_t = self.class_fc1_2(class_t)
+        class_t = self.relu(class_t)
+        class_t = self.drop(class_t)
+
+        class_t1 = self.class_fc2(class_t)
         class_t1 = self.relu(class_t1)
         class_t1 = self.drop(class_t1)
+		
+        class_t1 = F.softmax(self.class_out(class_t1), dim=1)
 
-        class_t2 = self.class_fc2(class_t1)
+
+        class_t2 = self.class_fc2a(class_t)
         class_t2 = self.relu(class_t2)
         class_t2 = self.drop(class_t2)
 
-        class_t3 = self.class_fc2(class_t1)
-        class_t3 = self.relu(class_t3)
-        class_t3 = self.drop(class_t3)
+        class_t2 = F.softmax(self.class_outa(class_t2), dim=1)
 
-        class_t0 = F.softmax(self.class_out(class_t2), dim=1)
-        class_t1 = F.softmax(self.class_out(class_t3), dim=1)
 
         box_t = self.box_fc1(t)
         box_t = self.relu(box_t)
@@ -301,15 +311,15 @@ class Network(nn.Module):
         box_t0 = self.box_out(box_t)
         box_t0 = F.sigmoid(box_t0)
 
-        box_t1 = self.box_out(box_t)
+        box_t1 = self.box_outa(box_t)
         box_t1 = F.sigmoid(box_t1)
 
-        return [class_t0, box_t0, class_t1, box_t1]
+        return [class_t1, box_t0, class_t2, box_t1]
 
 print("Creata cnn")
 model = Network()
 model.apply(initialize_weights)
-model.load_state_dict(torch.load("models/model_ep101.pth"))
+#model.load_state_dict(torch.load("models/model_ep101.pth"))
 model = model.to(device)
 
 
@@ -326,8 +336,7 @@ valdataloader = torch.utils.data.DataLoader(valdataset, batch_size=32, shuffle=T
 
 def train(model):
     # Defining the optimizer
-    optimizer = optim.Adam(model.parameters(), lr = 0.00005)
-    num_of_epochs = 400
+    optimizer = optim.Adam(model.parameters(), lr = 0.000001)
     epochs = []
     losses = []
     # Creating a directory for storing models
@@ -386,13 +395,15 @@ def train(model):
                   (time.time()-train_start)/60, end='\r')
         epochs.append(epoch)
         losses.append(tot_loss)
-        print("Epoch", epoch, "Accuracy", (tot_correct)/125, "loss:",
-              tot_loss/125, " time: ", (time.time()-train_start)/60, " mins")
+        print("Epoch", epoch, "Accuracy", (tot_correct)/(samples / 32), "loss:",
+              tot_loss/(samples / 32), " time: ", (time.time()-train_start)/60, " mins")
         if(epoch%50 == 0):
           torch.save(model.state_dict(), "models/model_ep"+str(epoch+1)+".pth")
 
-print("Creato train")    
-#train(model)
+print("Creato train")   
+#print(device) 
+if active_train:
+    train(model)
 #torch.save(model.state_dict(), "models/model_ep"+str(1000)+".pth")
 print("Eseguito train")
 
@@ -449,10 +460,10 @@ def predict(image):
 
     img = cv2.resize(img, (scale, scale))
     cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 100), 1)
-    cv2.rectangle(img, (x3, y3), (x4, y4), (0, 255, 100), 1)
+    cv2.rectangle(img, (x3, y3), (x4, y4), (255, 0, 100), 1)
 
-    cv2.putText(img, '{}, CONFIDENCE: {}'.format(label, confidence), (5, int(15 * 0.5)), cv2.FONT_HERSHEY_COMPLEX, 0.15, (200, 55, 100), 1)
-    cv2.putText(img, '{}, CONFIDENCE: {}'.format(label1, confidence1), (5, int(20 * 0.5)), cv2.FONT_HERSHEY_COMPLEX, 0.15, (200, 55, 100), 1)
+    #cv2.putText(img, '{}, CONFIDENCE: {}'.format(label, confidence), (5, int(15 * 0.5)), cv2.FONT_HERSHEY_COMPLEX, 0.15, (200, 55, 100), 1)
+    #cv2.putText(img, '{}, CONFIDENCE: {}'.format(label1, confidence1), (5, int(20 * 0.5)), cv2.FONT_HERSHEY_COMPLEX, 0.15, (200, 55, 100), 1)
 
     print("Informazioni")
     print(label, confidence.item())
@@ -468,5 +479,5 @@ torch.cuda.empty_cache()
 
 while(True):
     imcode = input("Codice: ")
-    image = "../../assignment_1/train/images/"+imcode+".jpg"
+    image = "./assignment_1/train/images/"+imcode+".jpg"
     predict(image)
