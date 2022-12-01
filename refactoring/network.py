@@ -28,15 +28,15 @@ class Network(nn.Module):
             nn.Conv2d(in_channels=150, out_channels= 150, kernel_size=3, padding = 'same'),
             nn.BatchNorm2d(150))
 
-        self.conv5 = nn.Sequential(nn.Conv2d(in_channels=150, out_channels= 300, kernel_size=3, padding = 2), nn.BatchNorm2d(300))
+        self.conv5 = nn.Sequential(nn.Conv2d(in_channels=150, out_channels= 350, kernel_size=3, padding = 2), nn.BatchNorm2d(350))
         
-        self.conv6 = nn.Conv2d(in_channels=300, out_channels= 300, kernel_size=3, padding = 1)
+        self.conv6 = nn.Conv2d(in_channels=350, out_channels= 350, kernel_size=3, padding = 1)
 
-        self.conv7 = nn.Conv2d(in_channels=300, out_channels= 512, kernel_size=3)
+        self.conv7 = nn.Conv2d(in_channels=350, out_channels= 1024, kernel_size=3)
 
         #self.conv8 = nn.Conv2d(in_channels=2048, out_channels= 2048, kernel_size=3)
-        self.class_fc0 = nn.Linear(in_features=2048, out_features=1024)
-        self.class_fc0_1 = nn.Linear(in_features=1024, out_features=512)
+        self.class_fc0 = nn.Linear(in_features=1024, out_features=750)
+        self.class_fc0_1 = nn.Linear(in_features=750, out_features=512)
         self.class_fc1 = nn.Linear(in_features=512, out_features=300)
         self.class_fc1_2 = nn.Linear(in_features=300, out_features=150)
         self.class_fc2 = nn.Linear(in_features=150, out_features=20)
@@ -45,8 +45,8 @@ class Network(nn.Module):
         self.class_fc2a = nn.Linear(in_features=150, out_features=20)
         self.class_outa = nn.Linear(in_features=20, out_features=13)
 
-        self.box_fc0 = nn.Linear(in_features=2048, out_features=1024)
-        self.box_fc0_1 = nn.Linear(in_features=1024, out_features=512)
+        self.box_fc0 = nn.Linear(in_features=1024, out_features=750)
+        self.box_fc0_1 = nn.Linear(in_features=750, out_features=512)
         self.box_fc1 = nn.Linear(in_features=512, out_features=300)
         self.box_fc1_2 = nn.Linear(in_features=300, out_features=150)
         self.box_fc2 = nn.Linear(in_features=150, out_features=20)

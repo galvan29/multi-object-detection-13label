@@ -8,11 +8,12 @@ import sys
 
 
 # Settable parameters
-scale           = 160 
-samples         = 100 
+scale           = 112 
+samples         = 2 
 active_train    = True
 num_of_epochs   = 5
-image_dir       = './assignment_1/train/'
+train_image_dir = '../../assignment_1/train/'
+val_image_dir   = '../../assignment_1/test/'
 load_model      = False
 number_model    = 141
 lr              = 0.0001
@@ -47,9 +48,18 @@ if __name__ == "__main__":
     lr              = int(sys.argv[6])
     """
 
-    # Loading datase 
-    labels, boxes, images, train_images, val_images, train_labels, val_labels, train_boxes, val_boxes = dataset(
-        image_dir=image_dir,
+    # Loading training dataset
+    train_images, train_labels, train_boxes = dataset(
+        image_dir=train_image_dir,
+        samples=samples,
+        scale=scale,
+        active_train=active_train,
+        changes=changes
+    ) 
+
+    # Loading test dataset
+    val_images, val_labels, val_boxes = dataset(
+        image_dir=val_image_dir,
         samples=samples,
         scale=scale,
         active_train=active_train,

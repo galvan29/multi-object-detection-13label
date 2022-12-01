@@ -56,23 +56,20 @@ def process_dataset(image_dir = "./assignment_1/train/", samples = 200, scale = 
               images.append(image)
               cicle += 1
     
-    train_labels = []
-    train_boxes = []
-    #print(labels)
+    t_labels = []
+    t_boxes = []
 
     for label in labels:
-        train_labels.append([changes[label[i]] if i<len(label) else -1 for i in range(max(6, len(label)))])
+        t_labels.append([changes[label[i]] if i<len(label) else -1 for i in range(max(6, len(label)))])
 
     for box in boxes:
-        train_boxes.append([box[i] if i<len(box) else [-1, -1, -1, -1] for i in range(max(6, len(box)))])
+        t_boxes.append([box[i] if i<len(box) else [-1, -1, -1, -1] for i in range(max(6, len(box)))])
 
-    train_images, val_images, train_labels, \
-    val_labels, train_boxes, val_boxes = train_test_split(
-        np.array(images), 
-        np.array(train_labels), np.array(train_boxes), test_size = 0.2, 
-        random_state = 43)
+    t_images = np.array(images)
+    t_labels = np.array(t_labels)
+    t_boxes = np.array(t_boxes)
 
-    return labels, boxes, images, train_images, val_images, train_labels, val_labels, train_boxes, val_boxes
+    return t_images, t_labels, t_boxes
 
 
 class Dataset():
