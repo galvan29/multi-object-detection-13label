@@ -1,0 +1,7 @@
+*.zip
+assignment_1/*
+assignment_1
+models/*
+.vscode/*
+.vscode
+*/settings.json
