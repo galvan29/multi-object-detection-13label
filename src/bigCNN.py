@@ -28,21 +28,20 @@ import time
 from PIL import Image
 from sklearn.model_selection import train_test_split
 
-scale = 112 
-samples = 10000
-active_train = True
-num_of_epochs = 500
+scale = 160 
+samples = 4
+active_train = False 
+num_of_epochs = 501
 image_dir = './assignment_1/train/'
-load_model = False
-number_model = 501
-lr = 0.0000075
+load_model = True 
+number_model = 481
+lr = 0.0001
 
 def items(jsstring):
     ret = []
     for i in range(1,20):
         if "item"+str(i) in jsstring:
             ret.append(jsstring["item"+str(i)])
-    
     return ret
 
 
@@ -75,7 +74,7 @@ def preprocess_dataset():
                   lista[1] = lista[1]/scale/h
                   lista[2] = lista[2]/scale/w
                   lista[3] = lista[3]/scale/h
-                  boxes[cicle].append(item['bounding_box'])
+                  boxes[cicle].append(lista)
                   labels[cicle].append(item['category_name'])
               images.append(image)
               cicle += 1
@@ -171,14 +170,15 @@ for label in labels:
 for box in boxes:
   train_boxes.append([box[i] if i<len(box) else [-1, -1, -1, -1] for i in range(max(6, len(box)))])
 #train_labels = np.array(train_labels)
-
+#print(train_labels, train_boxes, img_list)
 train_images, val_images, train_labels, \
 val_labels, train_boxes, val_boxes = train_test_split( np.array(img_list), 
                 np.array(train_labels), np.array(train_boxes), test_size = 0.2, 
                 random_state = 43)
 
-
+print(torch.cuda.is_available())
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#map_location = torch.device('cpu')
 device
 
 class Dataset():
@@ -216,13 +216,19 @@ class Network(nn.Module):
         super(Network, self).__init__()
         
         # CNN
-        self.conv1 = nn.Sequential(nn.Conv2d(in_channels=3, out_channels=12, stride=2, kernel_size=7, padding = 4), nn.BatchNorm2d(12))
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=12, stride=2, kernel_size=7, padding = 4),
+            nn.Conv2d(in_channels=12, out_channels=12, kernel_size=7, padding = 'same'),
+            nn.BatchNorm2d(12))
 
         self.conv2 = nn.Sequential(nn.Conv2d(in_channels=12, out_channels= 25, kernel_size=3, padding = 3), nn.BatchNorm2d(25))
 
         self.conv3 = nn.Sequential(nn.Conv2d(in_channels=25, out_channels= 75, kernel_size=3, padding = 2), nn.BatchNorm2d(75))
 
-        self.conv4 = nn.Sequential(nn.Conv2d(in_channels=75, out_channels= 150, kernel_size=3, padding = 2), nn.BatchNorm2d(150))
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(in_channels=75, out_channels= 150, kernel_size=3, padding = 2),
+            nn.Conv2d(in_channels=150, out_channels= 150, kernel_size=3, padding = 'same'),
+            nn.BatchNorm2d(150))
 
         self.conv5 = nn.Sequential(nn.Conv2d(in_channels=150, out_channels= 300, kernel_size=3, padding = 2), nn.BatchNorm2d(300))
         
@@ -231,7 +237,8 @@ class Network(nn.Module):
         self.conv7 = nn.Conv2d(in_channels=300, out_channels= 512, kernel_size=3)
 
         #self.conv8 = nn.Conv2d(in_channels=2048, out_channels= 2048, kernel_size=3)
-
+        self.class_fc0 = nn.Linear(in_features=2048, out_features=1024)
+        self.class_fc0_1 = nn.Linear(in_features=1024, out_features=512)
         self.class_fc1 = nn.Linear(in_features=512, out_features=300)
         self.class_fc1_2 = nn.Linear(in_features=300, out_features=150)
         self.class_fc2 = nn.Linear(in_features=150, out_features=20)
@@ -239,7 +246,9 @@ class Network(nn.Module):
 		
         self.class_fc2a = nn.Linear(in_features=150, out_features=20)
         self.class_outa = nn.Linear(in_features=20, out_features=13)
-        
+
+        self.box_fc0 = nn.Linear(in_features=2048, out_features=1024)
+        self.box_fc0_1 = nn.Linear(in_features=1024, out_features=512)
         self.box_fc1 = nn.Linear(in_features=512, out_features=300)
         self.box_fc1_2 = nn.Linear(in_features=300, out_features=150)
         self.box_fc2 = nn.Linear(in_features=150, out_features=20)
@@ -248,15 +257,17 @@ class Network(nn.Module):
         self.box_outa = nn.Linear(in_features=20, out_features=4)
 
 
-        self.relu = nn.LeakyReLU(inplace = True)
+        self.relu = nn.LeakyReLU(inplace = True, negative_slope = 0.01)
         self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.drop = nn.Dropout(0.4)
+        self.drop = nn.Dropout(0.15)
+        self.drop2d = nn.Dropout2d(0.05)
 
     def forward(self, t):
         t = self.conv1(t)
         t = self.relu(t)
         t = self.max_pool(t)
-        
+        t = self.drop2d(t)
+
         t = self.conv2(t)
         t = self.relu(t)
         t = self.max_pool(t)
@@ -268,6 +279,7 @@ class Network(nn.Module):
         t = self.conv4(t)
         t = self.relu(t)
         t = self.max_pool(t)
+        t = self.drop2d(t)
 
         t = self.conv5(t)
         t = self.relu(t)
@@ -281,7 +293,15 @@ class Network(nn.Module):
         t = torch.flatten(t, start_dim=1)
 
         #print(len(t))
-        class_t = self.class_fc1(t)
+        class_t = self.class_fc0(t)
+        class_t = self.relu(class_t)
+        class_t = self.drop(class_t)
+
+        class_t = self.class_fc0_1(class_t)
+        class_t = self.relu(class_t)
+        class_t = self.drop(class_t)
+
+        class_t = self.class_fc1(class_t)
         class_t = self.relu(class_t)
         class_t = self.drop(class_t)
 
@@ -295,15 +315,24 @@ class Network(nn.Module):
 		
         class_t1 = F.softmax(self.class_out(class_t1), dim=1)
 
-
         class_t2 = self.class_fc2a(class_t)
         class_t2 = self.relu(class_t2)
         class_t2 = self.drop(class_t2)
 
-        class_t2 = F.softmax(self.class_outa(class_t2), dim=1)
+        class_t2 = self.class_outa(class_t2)
+
+        class_t2 = F.softmax(class_t2, dim=1)
+        
+        box_t = self.box_fc0(t)
+        box_t = self.relu(box_t)
+        box_t = self.drop(box_t)
+
+        box_t = self.box_fc0_1(box_t)
+        box_t = self.relu(box_t)
+        box_t = self.drop(box_t)
 
 
-        box_t = self.box_fc1(t)
+        box_t = self.box_fc1(box_t)
         box_t = self.relu(box_t)
         box_t = self.drop(box_t)
 
@@ -363,18 +392,20 @@ def train(model):
             [y_pred, z_pred, y1_pred, z1_pred]= model(x)
             class_loss = 0
             box_loss = 0
-
             class_loss = F.cross_entropy(y_pred, y1)
             box_loss = F.mse_loss(z_pred, z1)
-
             (class_loss+box_loss).backward(retain_graph=True)
+            optimizer.step()
+            [y_pred, z_pred, y1_pred, z1_pred]= model(x)
 
             y2,z2 = y[:,1].to(device),z[:,1].to(device)
             y2 = torch.where(y2 < 0, y1, y2)
             z2 = torch.where(z2 < 0, z1, z2)
+
+            optimizer.zero_grad()
             class_loss = F.cross_entropy(y1_pred, y2)
             box_loss = F.mse_loss(z1_pred, z2)
-            optimizer.zero_grad()
+
             (class_loss+box_loss).backward()
 
             optimizer.step()
@@ -393,23 +424,22 @@ def train(model):
                 class_loss = F.cross_entropy(y_pred, y)
                 box_loss = F.mse_loss(z_pred, z)
             tot_loss += (class_loss.item() + box_loss.item())
-            #print(class_loss.item())
-            #print(box_loss.item())
+
             tot_correct += get_num_correct(y_pred, y)
             print("Test batch:", batch+1, " epoch: ", epoch, " ",
                   (time.time()-train_start)/60, end='\r')
         epochs.append(epoch)
         losses.append(tot_loss)
-        print("Epoch", epoch, "Accuracy", (tot_correct)/(samples / 32), "loss:",
-              tot_loss/(samples / 32), " time: ", (time.time()-train_start)/60, " mins")
-        if(epoch%50 == 0):
+        print("Epoch", epoch, "Accuracy", (tot_correct/samples), "loss:",
+              tot_loss/(samples), " time: ", (time.time()-train_start)/60, " mins")
+        if(epoch%20 == 0):
           torch.save(model.state_dict(), "models/model_ep"+str(epoch+1)+".pth")
 
 print("Creato train")   
 #print(device) 
 if active_train:
-    train(model)
-torch.save(model.state_dict(), "models/model_ep"+str(1000)+".pth")
+  train(model)
+  #torch.save(model.state_dict(), "models/model_ep"+str(10000)+".pth")
 print("Eseguito train")
 
 def preprocess(img, image_size = scale):
@@ -475,12 +505,13 @@ def predict(image):
     print(label1, confidence1.item())
 
     plt.imshow(img[:,:,::-1])
+    plt.savefig("prova.jpg")
     plt.show()
 
-import gc
-gc.collect()
-model = ""
-torch.cuda.empty_cache()
+#import gc
+#gc.collect()
+#model = ""
+#torch.cuda.empty_cache()
 
 while(True):
     imcode = input("Codice: ")
