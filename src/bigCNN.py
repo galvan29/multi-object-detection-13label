@@ -6,7 +6,7 @@
 import os
 import cv2
 import json
-import torch
+import torch 
 import torchvision
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
@@ -29,10 +29,13 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 
 scale = 112 
-samples = 18000
+samples = 10000
 active_train = True
-num_of_epochs = 50
+num_of_epochs = 500
 image_dir = './assignment_1/train/'
+load_model = False
+number_model = 501
+lr = 0.0000075
 
 def items(jsstring):
     ret = []
@@ -49,7 +52,7 @@ def preprocess_dataset():
     boxes = []
     images = []
 
-    rows = os.listdir(image_dir + "images")[::]
+    rows = os.listdir(image_dir + "images")[:samples]
     cicle = 0
     for row in rows[:samples]:
         stringa = str(row[0:6]) + ".json"
@@ -150,7 +153,7 @@ def change(label):
 # Load images, labels, boxes
 labels, boxes, img_list = preprocess_dataset()
 #print(boxes)
-display_boxes(labels, boxes, img_list)
+#display_boxes(labels, boxes, img_list)
 
 #train_images = np.array(img_list)
 #train_boxes = np.array(boxes)
@@ -160,7 +163,7 @@ classes = ['long sleeve dress', 'long sleeve outwear', 'long sleeve top',
 
 train_labels = []
 train_boxes = []
-print(labels)
+#print(labels)
 
 for label in labels:
   train_labels.append([change(label[i]) if i<len(label) else -1 for i in range(max(6, len(label)))])
@@ -219,27 +222,27 @@ class Network(nn.Module):
 
         self.conv3 = nn.Sequential(nn.Conv2d(in_channels=25, out_channels= 75, kernel_size=3, padding = 2), nn.BatchNorm2d(75))
 
-        self.conv4 = nn.Sequential(nn.Conv2d(in_channels=75, out_channels= 210, kernel_size=3, padding = 2), nn.BatchNorm2d(210))
+        self.conv4 = nn.Sequential(nn.Conv2d(in_channels=75, out_channels= 150, kernel_size=3, padding = 2), nn.BatchNorm2d(150))
 
-        self.conv5 = nn.Sequential(nn.Conv2d(in_channels=210, out_channels= 512, kernel_size=3, padding=2))
+        self.conv5 = nn.Sequential(nn.Conv2d(in_channels=150, out_channels= 300, kernel_size=3, padding = 2), nn.BatchNorm2d(300))
         
-        self.conv6 = nn.Conv2d(in_channels=512, out_channels= 1024, kernel_size=3)
+        self.conv6 = nn.Conv2d(in_channels=300, out_channels= 300, kernel_size=3, padding = 1)
 
-        self.conv7 = nn.Conv2d(in_channels=1024, out_channels= 2048, kernel_size=3)
+        self.conv7 = nn.Conv2d(in_channels=300, out_channels= 512, kernel_size=3)
 
         #self.conv8 = nn.Conv2d(in_channels=2048, out_channels= 2048, kernel_size=3)
 
-        self.class_fc1 = nn.Linear(in_features=2048, out_features=512)
-        self.class_fc1_2 = nn.Linear(in_features=512, out_features=256)
-        self.class_fc2 = nn.Linear(in_features=256, out_features=20)
+        self.class_fc1 = nn.Linear(in_features=512, out_features=300)
+        self.class_fc1_2 = nn.Linear(in_features=300, out_features=150)
+        self.class_fc2 = nn.Linear(in_features=150, out_features=20)
         self.class_out = nn.Linear(in_features=20, out_features=13)
 		
-        self.class_fc2a = nn.Linear(in_features=256, out_features=20)
+        self.class_fc2a = nn.Linear(in_features=150, out_features=20)
         self.class_outa = nn.Linear(in_features=20, out_features=13)
         
-        self.box_fc1 = nn.Linear(in_features=2048, out_features=512)
-        self.box_fc1_2 = nn.Linear(in_features=512, out_features=256)
-        self.box_fc2 = nn.Linear(in_features=256, out_features=20)
+        self.box_fc1 = nn.Linear(in_features=512, out_features=300)
+        self.box_fc1_2 = nn.Linear(in_features=300, out_features=150)
+        self.box_fc2 = nn.Linear(in_features=150, out_features=20)
         self.box_out = nn.Linear(in_features=20, out_features=4)
 		
         self.box_outa = nn.Linear(in_features=20, out_features=4)
@@ -247,7 +250,7 @@ class Network(nn.Module):
 
         self.relu = nn.LeakyReLU(inplace = True)
         self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.drop = nn.Dropout(0.25)
+        self.drop = nn.Dropout(0.4)
 
     def forward(self, t):
         t = self.conv1(t)
@@ -267,7 +270,11 @@ class Network(nn.Module):
         t = self.max_pool(t)
 
         t = self.conv5(t)
+        t = self.relu(t)
+        t = self.max_pool(t)
+
         t = self.conv6(t) 
+
         t = self.conv7(t) 
         #t = self.conv8(t) 
 
@@ -319,7 +326,8 @@ class Network(nn.Module):
 print("Creata cnn")
 model = Network()
 model.apply(initialize_weights)
-#model.load_state_dict(torch.load("models/model_ep101.pth"))
+if load_model:
+    model.load_state_dict(torch.load("models/model_ep"+str(number_model)+".pth"))
 model = model.to(device)
 
 
@@ -336,7 +344,7 @@ valdataloader = torch.utils.data.DataLoader(valdataset, batch_size=32, shuffle=T
 
 def train(model):
     # Defining the optimizer
-    optimizer = optim.Adam(model.parameters(), lr = 0.000001)
+    optimizer = optim.Adam(model.parameters(), lr)
     epochs = []
     losses = []
     # Creating a directory for storing models
@@ -355,23 +363,20 @@ def train(model):
             [y_pred, z_pred, y1_pred, z1_pred]= model(x)
             class_loss = 0
             box_loss = 0
-            class_loss1 = 0
-            box_loss1 = 0
-
 
             class_loss = F.cross_entropy(y_pred, y1)
             box_loss = F.mse_loss(z_pred, z1)
 
-            #(class_loss+box_loss).backward()
+            (class_loss+box_loss).backward(retain_graph=True)
 
             y2,z2 = y[:,1].to(device),z[:,1].to(device)
             y2 = torch.where(y2 < 0, y1, y2)
             z2 = torch.where(z2 < 0, z1, z2)
-
             class_loss = F.cross_entropy(y1_pred, y2)
             box_loss = F.mse_loss(z1_pred, z2)
-
+            optimizer.zero_grad()
             (class_loss+box_loss).backward()
+
             optimizer.step()
 
             print("Train batch:", batch+1, " epoch: ", epoch, " ",
@@ -404,7 +409,7 @@ print("Creato train")
 #print(device) 
 if active_train:
     train(model)
-#torch.save(model.state_dict(), "models/model_ep"+str(1000)+".pth")
+torch.save(model.state_dict(), "models/model_ep"+str(1000)+".pth")
 print("Eseguito train")
 
 def preprocess(img, image_size = scale):
@@ -444,7 +449,7 @@ def postprocess(image, results):
 def predict(image):
     model = Network()
     model = model.to(device)
-    model.load_state_dict(torch.load("models/model_ep1000.pth"))
+    model.load_state_dict(torch.load("models/model_ep"+str(number_model)+".pth"))
     model.eval()
     
     # Reading Image
@@ -479,5 +484,5 @@ torch.cuda.empty_cache()
 
 while(True):
     imcode = input("Codice: ")
-    image = "./assignment_1/train/images/"+imcode+".jpg"
+    image = "./assignment_1/test/images/"+imcode+".jpg"
     predict(image)
