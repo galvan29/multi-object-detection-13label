@@ -13,7 +13,8 @@ def items(jsstring):
     return ret
 
 def process_dataset(image_dir = "./assignment_1/train/", samples = 200, scale = 160, active_train = False, changes={}):
-    if not active_train: return
+    if not active_train: 
+        return [], [], []
     
     # ret values
     labels  = []
@@ -21,11 +22,12 @@ def process_dataset(image_dir = "./assignment_1/train/", samples = 200, scale = 
     images  = []
 
     # loading
+    samples = int(samples)
     rows = os.listdir(image_dir + "images")[:samples]
     cicle = 0
 
     for row in rows[:samples]:
-        imageinfo_filename = str(row[0:6]) + ".json"
+        imageinfo_filename = str(row[int(0):int(6)]) + ".json"
 
         with open(image_dir + "annotations/" + imageinfo_filename, 'r') as f:
             data = json.loads(f.read())

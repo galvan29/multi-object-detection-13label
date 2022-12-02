@@ -4,4 +4,7 @@ assignment_1
 models/*
 .vscode/*
 .vscode
+*.pth
+*.pyc
+*.jpg
 */settings.json

@@ -34,7 +34,6 @@ class Network(nn.Module):
 
         self.conv7 = nn.Conv2d(in_channels=350, out_channels= 1024, kernel_size=3)
 
-        #self.conv8 = nn.Conv2d(in_channels=2048, out_channels= 2048, kernel_size=3)
         self.class_fc0 = nn.Linear(in_features=1024, out_features=750)
         self.class_fc0_1 = nn.Linear(in_features=750, out_features=512)
         self.class_fc1 = nn.Linear(in_features=512, out_features=300)
@@ -57,7 +56,7 @@ class Network(nn.Module):
 
         self.relu = nn.LeakyReLU(inplace = True, negative_slope = 0.01)
         self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.drop = nn.Dropout(0.15)
+        self.drop = nn.Dropout(0.3)
         self.drop2d = nn.Dropout2d(0.05)
 
     def forward(self, t):
@@ -86,11 +85,9 @@ class Network(nn.Module):
         t = self.conv6(t) 
 
         t = self.conv7(t) 
-        #t = self.conv8(t) 
 
         t = torch.flatten(t, start_dim=1)
 
-        #print(len(t))
         class_t = self.class_fc0(t)
         class_t = self.relu(class_t)
         class_t = self.drop(class_t)
@@ -155,30 +152,31 @@ def initialize_weights(m):
       nn.init.kaiming_uniform_(m.weight.data)
       nn.init.constant_(m.bias.data, 0)
 
-def train(num_of_epochs, lr, dataset, valdataset, samples):
+def train(num_of_epochs, lr, dataset, valdataset, samples, savedir):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
-
     valdataloader = torch.utils.data.DataLoader(valdataset, batch_size=32, shuffle=True)
 
     model = Network()
     model.apply(initialize_weights)
-    
     model = model.to(device)
 
     # Defining the optimizer
     optimizer = optim.Adam(model.parameters(), lr)
     epochs = []
     losses = []
+
     # Creating a directory for storing models
-    if not os.path.isdir('models'):
-        os.mkdir('models')
+    if not os.path.isdir(savedir):
+        os.mkdir(savedir)
+
     for epoch in range(num_of_epochs):
         tot_loss = 0
         tot_correct = 0
         train_start = time.time()
         model.train()
+
         for batch, (x, y, z) in enumerate(dataloader):
         	# Converting data from cpu to GPU if available to improve speed
             x,y1,z1 = x.to(device),y[:,0].to(device),z[:,0].to(device)
@@ -202,30 +200,30 @@ def train(num_of_epochs, lr, dataset, valdataset, samples):
             box_loss = F.mse_loss(z1_pred, z2)
 
             (class_loss+box_loss).backward()
-
             optimizer.step()
 
-            print("Train batch:", batch+1, " epoch: ", epoch, " ",
-                  (time.time()-train_start)/60, end='\r')
+            print("Train batch:", batch+1, " epoch: ", epoch, " ", (time.time()-train_start)/60, end='\r')
+
         model.eval()
+
         for batch, (x, y, z) in enumerate(valdataloader):
-        	
             x,y,z = x.to(device),y[:,0].to(device),z[:,0].to(device)
-            
             optimizer.zero_grad()
+
             with torch.no_grad():
                 [y_pred,z_pred, y1_pred, z1_pred]= model(x)
-                
                 class_loss = F.cross_entropy(y_pred, y)
                 box_loss = F.mse_loss(z_pred, z)
-            tot_loss += (class_loss.item() + box_loss.item())
 
+            tot_loss += (class_loss.item() + box_loss.item())
             tot_correct += get_num_correct(y_pred, y)
-            print("Test batch:", batch+1, " epoch: ", epoch, " ",
-                  (time.time()-train_start)/60, end='\r')
+
+            print("Test batch:", batch+1, " epoch: ", epoch, " ", (time.time()-train_start)/60, end='\r')
+
         epochs.append(epoch)
         losses.append(tot_loss)
+
         print("Epoch", epoch, "Accuracy", (tot_correct/samples), "loss:",
               tot_loss/(samples), " time: ", (time.time()-train_start)/60, " mins")
-        if(epoch%20 == 0):
-          torch.save(model.state_dict(), "models/model_ep"+str(epoch+1)+".pth")
+
+        torch.save(model.state_dict(), savedir+"/model_ep"+str(epoch+1)+".pth")
