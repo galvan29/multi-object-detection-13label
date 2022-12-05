@@ -24,8 +24,7 @@ def process_dataset(image_dir = "./assignment_1/train/", samples = 200, scale = 
     # loading
     samples = int(samples)
     rows = os.listdir(image_dir + "images")[:samples]
-    cicle = 0
-
+    i = 0
     for row in rows[:samples]:
         imageinfo_filename = str(row[int(0):int(6)]) + ".json"
 
@@ -41,35 +40,34 @@ def process_dataset(image_dir = "./assignment_1/train/", samples = 200, scale = 
             image = cv2.resize(image, (scale, scale))
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             image = image.astype("float") / (255.0) 
+            labels.append([])
+            boxes.append([])
             
-            if True: 
-              boxes.append([])
-              labels.append([])
-              for item in array:
-                  lista = item['bounding_box']
+            for item in array:   #migliorare
+                lista = item['bounding_box']
+                lista[0] = lista[0]/scale/w
+                lista[1] = lista[1]/scale/h
+                lista[2] = lista[2]/scale/w
+                lista[3] = lista[3]/scale/h
 
-                  lista[0] = lista[0]/scale/w
-                  lista[1] = lista[1]/scale/h
-                  lista[2] = lista[2]/scale/w
-                  lista[3] = lista[3]/scale/h
-
-                  boxes[cicle].append(lista)
-                  labels[cicle].append(item['category_name'])
-              images.append(image)
-              cicle += 1
-    
+                boxes[i].append(lista)
+                labels[i].append(item['category_name'])
+                images.append(image)
+            i += 1
     t_labels = []
     t_boxes = []
 
+    #for label in labels:
+        #t_labels.append([changes[label[i]] if i<len(label) else -1 for i in range(max(6, len(label)))])
+
+   #for box in boxes:
+        #t_boxes.append([box[i] if i<len(box) else [-1, -1, -1, -1] for i in range(max(6, len(box)))])
+
     for label in labels:
-        t_labels.append([changes[label[i]] if i<len(label) else -1 for i in range(max(6, len(label)))])
-
-    for box in boxes:
-        t_boxes.append([box[i] if i<len(box) else [-1, -1, -1, -1] for i in range(max(6, len(box)))])
-
+        t_labels.append([changes[label[0]], changes[label[1]]])
     t_images = np.array(images)
     t_labels = np.array(t_labels)
-    t_boxes = np.array(t_boxes)
+    t_boxes = np.array(boxes)
 
     return t_images, t_labels, t_boxes
 

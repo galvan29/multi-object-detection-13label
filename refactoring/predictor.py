@@ -14,8 +14,9 @@ def preprocess(img, image_size):
     image = cv2.resize(img, (image_size, image_size))
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     image = image.astype("float") / 255.0 
+
+    # Expand dimensions as predict expect image in batches
     image = np.expand_dims(image, axis=0) 
-    
     return image
 
 def postprocess(image, results, classes, scale):
@@ -45,7 +46,7 @@ def postprocess(image, results, classes, scale):
 
 def predict(image, number_model, scale, showfinalimage, saveimage, classes, savedir):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = Network()
+    model = Network(True)
     model = model.to(device)
     model.load_state_dict(torch.load(savedir+"/model_ep"+str(number_model)+".pth"))
     model.eval()
@@ -55,7 +56,7 @@ def predict(image, number_model, scale, showfinalimage, saveimage, classes, save
     h = img.shape[0] / scale
     w = img.shape[1] / scale
 
-    # Before we can make a prediction we need to preprocess the image.
+    # # Before we can make a prediction we need to preprocess the image.
     processed_image = preprocess(img, scale)
     result = model(torch.permute(torch.from_numpy(processed_image).float(),(0,3,1,2)).to(device))
 
