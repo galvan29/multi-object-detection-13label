@@ -8,9 +8,11 @@ import sys
 from predictor import *
 
 # Settable parameters
+#Get-Content input.txt |  C:/Users/fdsa/anaconda3/python.exe main.py 112 18000 1 2001 0 2001 0.000001 . ./models2
+
 scale           = 112 
 samples         = 18000
-active_train    = True
+active_train    = False
 num_of_epochs   = 2001
 train_image_dir = '/assignment_1/train/'
 val_image_dir   = '/assignment_1/test/'
@@ -91,17 +93,19 @@ if __name__ == "__main__":
     # Loading test dataset
     val_images, val_labels, val_boxes = dataset(
         image_dir   = fromdir + val_image_dir,
-        samples     = samples/6,
+        samples     = 3000,
         scale       = scale,
         active_train= active_train,
         changes     = changes
     ) 
 
-    datas = Dataset(train_images, train_labels, train_boxes)
-    valdataset = ValDataset(val_images, val_labels, val_boxes)
+    
 
     # Train model
     if active_train:
+        datas = Dataset(train_images, train_labels, train_boxes)
+        valdataset = ValDataset(val_images, val_labels, val_boxes)
+
         train(
             num_of_epochs   = num_of_epochs,
             lr              = lr,
