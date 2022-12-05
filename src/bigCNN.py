@@ -34,7 +34,7 @@ active_train = False
 num_of_epochs = 501
 image_dir = './assignment_1/train/'
 load_model = True 
-number_model = 481
+number_model = 2001
 lr = 0.0001
 
 def items(jsstring):
