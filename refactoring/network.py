@@ -40,28 +40,17 @@ class Network(nn.Module):
         self.class_fc1 = nn.Linear(in_features=512, out_features=300)
         self.class_fc1_2 = nn.Linear(in_features=300, out_features=150)
 
-
         self.class_fc2 = nn.Linear(in_features=150, out_features=20)
         self.class_out = nn.Linear(in_features=20, out_features=13)
 		
-        self.class_fc2a = nn.Linear(in_features=150, out_features=20)
-        self.class_outa = nn.Linear(in_features=20, out_features=13)
-
 
         self.box_fc0 = nn.Linear(in_features=1024, out_features=750)
-
         self.box_fc0_1 = nn.Linear(in_features=750, out_features=512)
         self.box_fc1 = nn.Linear(in_features=512, out_features=300)
         self.box_fc1_2 = nn.Linear(in_features=300, out_features=150)
         self.box_fc2 = nn.Linear(in_features=150, out_features=20)
-        self.box_out = nn.Linear(in_features=20, out_features=4)
+        self.box_out = nn.Linear(in_features=20, out_features=13*4)
 		
-        self.box_fc0_1b = nn.Linear(in_features=750, out_features=512)
-        self.box_fc1b = nn.Linear(in_features=512, out_features=300)
-        self.box_fc1_2b = nn.Linear(in_features=300, out_features=150)
-        self.box_fc2b = nn.Linear(in_features=150, out_features=20)
-        self.box_outb = nn.Linear(in_features=20, out_features=4)
-
         self.relu = nn.LeakyReLU(inplace = True, negative_slope = 0.01)
         self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.drop = nn.Dropout(0.3)
@@ -142,33 +131,7 @@ class Network(nn.Module):
         box_t0 = self.box_out(box_t0)
         box_t0 = F.sigmoid(box_t0)
 
-
-        class_t2 = self.class_fc2a(class_t)
-        class_t2 = self.relu(class_t2)
-        class_t2 = self.drop(class_t2)
-        class_t2 = self.class_outa(class_t2)
-        class_t2 = F.softmax(class_t2, dim=1)
-
-        box_t1 = self.box_fc0_1b(box_t)
-        box_t1 = self.relu(box_t1)
-        box_t1 = self.drop(box_t1)
-
-        box_t1 = self.box_fc1b(box_t1)
-        box_t1 = self.relu(box_t1)
-        box_t1 = self.drop(box_t1)
-
-        box_t1 = self.box_fc1_2b(box_t1)
-        box_t1 = self.relu(box_t1)
-        box_t1 = self.drop(box_t1)
-
-        box_t1 = self.box_fc2b(box_t1)
-        box_t1 = self.relu(box_t1)
-        box_t1 = self.drop(box_t1)
-
-        box_t1 = self.box_outb(box_t1)
-        box_t1 = F.sigmoid(box_t1)
-
-        return [class_t1, box_t0, class_t2, box_t1]
+        return [class_t1, box_t0]
 
 def initialize_weights(m):
   if isinstance(m, nn.Linear):
@@ -202,26 +165,16 @@ def train(num_of_epochs, lr, dataset, valdataset, samples, savedir):
 
         for batch, (x, y, z) in enumerate(dataloader):
         	# Converting data from cpu to GPU if available to improve speed
-            x,y1,z1 = x.to(device),y[:,0].to(device),z[:,0].to(device)
-            
+            x,y,z = x.to(device),y[:,0].to(device),z[:,0].to(device)
             optimizer.zero_grad()
-            [y_pred, z_pred, y_pred1, z_pred1]= model(x)
+            [y_pred, z_pred]= model(x)
             class_loss = 0
             box_loss = 0
-            class_loss = F.cross_entropy(y_pred, y1)
-            box_loss = F.mse_loss(z_pred, z1)
+            class_loss = F.cross_entropy(y_pred, y)  # 13 13
+            for zR in z:
+                box_loss += F.mse_loss(z_pred, z)
 
-            (class_loss+box_loss).backward(retain_graph=True)
-            optimizer.step()
-            [y_pred, z_pred, y_pred1, z_pred1]= model(x)
-
-            y2,z2 = y[:,1].to(device),z[:,1].to(device)
-
-            optimizer.zero_grad()
-            class_loss = F.cross_entropy(y_pred1, y2)
-            box_loss = F.mse_loss(z_pred1, z2)
-
-            (class_loss+box_loss).backward()
+            (class_loss+(box_loss/13)).backward()
             optimizer.step()
 
             print("Train batch:", batch+1, " epoch: ", epoch, " ", (time.time()-train_start)/60, end='\r')
@@ -233,11 +186,13 @@ def train(num_of_epochs, lr, dataset, valdataset, samples, savedir):
             optimizer.zero_grad()
 
             with torch.no_grad():
-                [y_pred, z_pred, y_pred1, z_pred1]= model(x)
+                [y_pred, z_pred]= model(x)
                 class_loss = F.cross_entropy(y_pred, y)
-                box_loss = F.mse_loss(z_pred, z)
+                for zR in z:
+                    box_loss += F.mse_loss(z_pred, z)
 
-            tot_loss += (class_loss.item() + box_loss.item())
+
+            tot_loss += (class_loss.item() + box_loss.item()/13)
             tot_correct += get_num_correct(y_pred, y)
 
             print("Test batch:", batch+1, " epoch: ", epoch, " ", (time.time()-train_start)/60, end='\r')

@@ -34,7 +34,7 @@ def process_dataset(image_dir = "./assignment_1/train/", samples = 200, scale = 
 
             # loading and scaling 
             img_path = row
-            image = cv2.imread(os.path.join(image_dir + "images/",img_path))
+            image = cv2.imread(os.path.join(image_dir + "all_images/",img_path))
             h = image.shape[0] / scale
             w = image.shape[1] / scale
             image = cv2.resize(image, (scale, scale))
@@ -63,8 +63,15 @@ def process_dataset(image_dir = "./assignment_1/train/", samples = 200, scale = 
    #for box in boxes:
         #t_boxes.append([box[i] if i<len(box) else [-1, -1, -1, -1] for i in range(max(6, len(box)))])
 
-    for label in labels:
-        t_labels.append([changes[label[0]], changes[label[1]]])
+    for box, label in zip(boxes, labels):
+        l_presenze = [0] * 13
+        b_presenze = [[]] * 13
+        for b, l in zip(box, label):
+            l_presenze[changes[l]] = 1
+            b_presenze[changes[l]] = b
+        t_labels.append(l_presenze)
+        boxes.append(b_presenze)
+
     t_images = np.array(images)
     t_labels = np.array(t_labels)
     t_boxes = np.array(boxes)
